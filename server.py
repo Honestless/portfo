@@ -1,6 +1,18 @@
-from flask import Flask, render_template, request, redirect, url_for
-import csv
+from flask import Flask, render_template, request, redirect, url_for, session
+from flask_sqlalchemy import SQLAlchemy
+from flask_login import login_required
+
 app = Flask(__name__)
+
+
+app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///database.db'
+app.secret_key = b'_5#y2L"F4Q8z\n\xec]/'
+db = SQLAlchemy(app)
+
+class User(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    email = db.Column(db.String(120))
+    password = db.Column(db.String(80))
 
 @app.route("/")
 def rdr():
@@ -10,49 +22,54 @@ def rdr():
 def my_home():
     return render_template('index.html')
 
+@app.route('/dashboard.html')
+@login_required
+def dashboard():
+    return render_template("dashboard.html")
+
+@app.route("/blog.html")
+def my_blog():
+    return render_template('blog.html')
+
 @app.route('/<string:page_name>')
 def html_page(page_name):
     return render_template(page_name)
 
-@app.route('/login', methods=['POST', 'GET'])
+@app.route("/login.html", methods=["GET", "POST"])
 def login():
-    if request.method == "POST":
-        user = request.form["nm"]
-        return redirect(url_for("user", usr=user))
+    if request.method == 'GET':
+        return render_template('login.html')
     else:
-        return render_template("login.html", )
-
-@app.route('/<usr>')
-def user(usr):
-    return f"<h1>{usr}</h1>"
-
-def write_to_file(data):
-    with open('database.txt', mode='a') as database:
-        email = data['email']
-        text = data['text']
-        message = data['message']
-        database_write = database.write(f"\n {email}, {text}, {message}")
-
-def write_to_csv(data):
-    with open('database.csv', mode='a', newline="") as database2:
-        email = data['email']
-        text = data['text']
-        message = data['message']
-        csv_writer = csv.writer(database2, delimiter=",", quotechar='"', quoting=csv.QUOTE_MINIMAL)
-        csv_writer.writerow([email, text, message])
-
-@app.route('/submit_form', methods=['POST', 'GET'])
-def submit_form():
-    if request.method == 'POST':
+        name = request.form['email']
+        passw = request.form['passw']
         try:
-            data = request.form.to_dict()
-            write_to_csv(data)
-            return redirect('/thankyou.html')
+            data = User.query.filter_by(username=name, password=passw).first()
+            if data is not None:
+                session['logged_in'] = True
+                return redirect(url_for('home'))
+            else:
+                return 'Dont Login'
         except:
-            return 'Contact attempt did not save to database.'
-    else:
-        return 'Something went wrong, try again'
+            return "Dont Login"
+
+
+@app.route("/register.html", methods=["GET", "POST"])
+def register():
+    if request.method == "POST":
+        email = request.form['email']
+        passw = request.form['passw']
+        if User.query.filter_by(email=email) != None:
+            register_user = User(email=email, password=passw)
+            db.session.add(register_user)
+            db.session.commit()
+
+        else:
+            print("Email already exists in the database", "error")
+
+        return redirect(url_for("login"))
+    return render_template("register.html")
 
 
 if __name__ == '__main__':
+    db.create_all()
     app.run(debug=True)
